@@ -8,7 +8,7 @@ let g:loaded_to_gopr = 1
 let s:save_cpo = &cpo
 set cpo&vim
 
-command! Gopr lua require('gopr').gopr()
+command! -nargs=? Gopr lua require('gopr').open_git_pull_request({ remote = <q-args> })
 
 let &cpo = s:save_cpo
 unlet s:save_cpo

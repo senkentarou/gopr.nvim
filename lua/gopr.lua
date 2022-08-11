@@ -3,12 +3,12 @@ local vim = vim
 local function run(command)
   local handle = io.popen(command)
   local result = handle:read("*a")
-  local status = handle:close()
+  handle:close()
 
-  return string.gsub(result, '\n', '')
+  return string.gsub(result, '\n', ' ')
 end
 
-function exists(path)
+local function exists(path)
    local f = io.open(path, "r")
 
    if f ~= nil then
@@ -19,7 +19,18 @@ function exists(path)
   end
 end
 
-local function gopr()
+local DEFAULT_OPTIONS = {
+  remote_base_url = 'github.com',
+  default_remote = 'origin'
+}
+
+local gopr = {}
+
+function gopr.setup(options)
+  vim.g.gopr = vim.tbl_deep_extend('force', DEFAULT_OPTIONS, options)
+end
+
+function gopr.open_git_pull_request(args)
   -- check .git repository
   if not exists('.git') then
     print('fatal: .git repository does not exist.')
@@ -43,17 +54,29 @@ local function gopr()
   local pr_number = run('git log --merges --oneline --reverse --ancestry-path ' .. commit_range .. ' | grep -o "#[0-9]*" -m 1 | sed s/#//g')
 
   -- detect remote url
-  local git_remote_url = run('git config --get remote.upstream.url | sed -E "s/\\.git//"')
+  local target_remote = vim.g.gopr.default_remote
+  if args and #args.remote > 0 then
+    target_remote = args.remote
+  end
 
-  if #pr_number <= 0 or #git_remote_url <= 0 then
-    print('fatal: could not find pr or remote url')
+  local git_remotes = run('git remote show')
+  if not string.find(git_remotes, target_remote) then
+    target_remote = DEFAULT_OPTIONS.default_remote
+  end
+
+  -- support with https or ssh url.
+  -- e.g.)
+  --  https://github.com/senkentarou/gopr.nvim.git => senkentarou/gopr.nvim
+  --  git@github.com:senkentarou/gopr.nvim.git     => senkentarou/gopr.nvim
+  local git_remote_url = run('git ls-remote --get-url ' .. target_remote)
+  local target_url_base = string.gsub(git_remote_url, '^.-' .. vim.g.gopr.remote_base_url .. '[:/]?(.*)%.git%s?$', '%1')
+  if #pr_number <= 0 or git_remote_url == target_url_base or #target_url_base <= 0 then
+    print('fatal: could not find pr or remote url.')
     return
   end
 
   -- open pull request
-  os.execute('open ' .. git_remote_url .. '/pull/' .. pr_number)
+  os.execute('open https://' .. vim.g.gopr.remote_base_url .. '/' .. target_url_base .. '/pull/' .. pr_number)
 end
 
-return {
-  gopr = gopr
-}
+return gopr
