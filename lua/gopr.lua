@@ -1,5 +1,9 @@
 local vim = vim
 
+local DEFAULT_OPTIONS = {
+  default_remote = 'origin'
+}
+
 local function run(command)
   local handle = io.popen(command)
   local result = handle:read("*a")
@@ -19,47 +23,33 @@ local function exists(path)
   end
 end
 
-local DEFAULT_OPTIONS = {
-  remote_base_url = 'github.com',
-  default_remote = 'origin'
-}
-
-local gopr = {}
-
-function gopr.setup(options)
-  vim.g.gopr = vim.tbl_deep_extend('force', DEFAULT_OPTIONS, options)
-end
-
-function gopr.open_git_pull_request(args)
+local function check_git()
   -- check .git repository
   if not exists('.git') then
-    print('fatal: .git repository does not exist.')
-    return
+    error('fatal: .git repository does not exist.')
   end
+end
 
+local function current_commit_hash()
   -- detect commit hash on current line
   local current_file = vim.fn.expand("%")
   local current_line = vim.fn.line('.')
   if #current_file <= 0 or current_line <= 0 then
-    print('fatal: could not find file or line.')
-    return
+    error('fatal: could not find file or line.')
   end
 
   local blame_hash = run('git blame -L ' .. current_line .. ',' .. current_line .. ' ' .. current_file .. ' | cut -d\' \' -f1')
-  local commit_hash = string.gsub(blame_hash, '[^0-9a-f]', '')
+  local commit_hash = string.gsub(run('git log --pretty=%H -1 ' .. string.gsub(blame_hash, '[^0-9a-f]', '')), '%s+', '')
   if string.find(commit_hash, '^0+$') then
-    print('fatal: current line is not commited yet.')
-    return
+    error('fatal: current line is not commited yet.')
   end
 
-  -- detect pr number
-  local commit_range = commit_hash .. '...HEAD'
-  local detect_merged_pr = run('git log --merges --oneline --reverse --ancestry-path ' .. commit_range .. ' | grep -o "#[0-9]*" -m 1 | sed s/#//g')
-  local pr_number = string.gsub(detect_merged_pr, '%s+', '')
+  return commit_hash
+end
 
-  -- detect remote url
+local function remote_base_url(args)
   local target_remote = vim.g.gopr.default_remote
-  if args and #args.remote > 0 then
+  if args and args.remote ~= nil and #args.remote > 0 then
     target_remote = args.remote
   end
 
@@ -68,22 +58,52 @@ function gopr.open_git_pull_request(args)
     target_remote = DEFAULT_OPTIONS.default_remote
   end
 
-  -- support with https or ssh url.
-  -- e.g.)
-  --  https://github.com/senkentarou/gopr.nvim.git => senkentarou/gopr.nvim
-  --  git@github.com:senkentarou/gopr.nvim.git     => senkentarou/gopr.nvim
   local git_remote_url = run('git ls-remote --get-url ' .. target_remote)
-  local url_base = string.gsub(git_remote_url, '^.-' .. vim.g.gopr.remote_base_url .. '[:/]?(.*)%.git%s?$', '%1')
-  if #pr_number <= 0 or git_remote_url == url_base or #url_base <= 0 then
-    print('fatal: could not find pr or remote url by commit hash: ' .. commit_hash)
-    return
+  local url_base = string.gsub(git_remote_url, '^.-github.com[:/]?(.*)%.git%s?$', '%1')
+  if git_remote_url == url_base or #url_base <= 0 then
+    error('fatal: could not open remote url about \'' .. git_remote_url .. '\'')
   end
 
-  -- open pull request
-  local target_url = 'https://' .. vim.g.gopr.remote_base_url .. '/' .. url_base .. '/pull/' .. pr_number
-  os.execute('open ' .. target_url)
+  return url_base
+end
 
-  print('opened: ' .. target_url .. ' on ' .. commit_hash)
+--
+-- Git open pull request
+--
+local gopr = {}
+
+function gopr.setup(options)
+  vim.g.gopr = vim.tbl_deep_extend('force', DEFAULT_OPTIONS, options)
+end
+
+-- open pull request directly
+function gopr.open_git_pull_request(args)
+  check_git()
+
+  local target_commit = current_commit_hash()
+
+  local target_pr = string.gsub(run('git log --merges --oneline --reverse --ancestry-path ' .. target_commit .. '...HEAD' .. ' | grep -o "#[0-9]*" -m 1 | sed s/#//g'), '%s+', '')
+
+  local target_remote = remote_base_url(args)
+
+  local target_url = 'https://github.com/' .. target_remote .. '/pull/' .. target_pr
+
+  os.execute('open ' .. target_url)
+  print('opened: ' .. target_url .. ' on ' .. target_commit)
+end
+
+-- open commit diff (and open pull request manually)
+function gopr.open_git_commit_diff(args)
+  check_git()
+
+  local target_commit = current_commit_hash()
+
+  local target_remote = remote_base_url(args)
+
+  local target_url = 'https://github.com/' .. target_remote .. '/commit/' .. target_commit
+
+  os.execute('open ' .. target_url)
+  print('opened: ' .. target_url)
 end
 
 return gopr
