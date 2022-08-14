@@ -83,6 +83,9 @@ function gopr.open_git_pull_request(args)
   local target_commit = current_commit_hash()
 
   local target_pr = string.gsub(run('git log --merges --oneline --reverse --ancestry-path ' .. target_commit .. '...HEAD' .. ' | grep -o "#[0-9]*" -m 1 | sed s/#//g'), '%s+', '')
+  if #target_pr == 0 then
+    error('fatal: could not detect pull request number.')
+  end
 
   local target_remote = remote_base_url(args)
 
