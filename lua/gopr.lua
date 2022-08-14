@@ -38,13 +38,12 @@ local function current_commit_hash()
     error('fatal: could not find file or line.')
   end
 
-  local blame_hash = run('git blame -L ' .. current_line .. ',' .. current_line .. ' ' .. current_file .. ' | cut -d\' \' -f1')
-  local commit_hash = string.gsub(run('git log --pretty=%H -1 ' .. string.gsub(blame_hash, '[^0-9a-f]', '')), '%s+', '')
-  if string.find(commit_hash, '^0+$') then
+  local blame_hash = string.gsub(run('git blame -L ' .. current_line .. ',' .. current_line .. ' ' .. current_file .. ' | cut -d\' \' -f1'), '[^0-9a-f]', '')
+  if string.find(blame_hash, '^0+$') then
     error('fatal: current line is not commited yet.')
   end
 
-  return commit_hash
+  return string.gsub(run('git log --pretty=%H -1 ' .. blame_hash), '%s+', '')
 end
 
 local function remote_base_url(args)
