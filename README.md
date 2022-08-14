@@ -17,7 +17,6 @@ require('gopr').setup {}
 * For customizing, please setup as below,
 ```
 require('gopr').setup {
-  remote_base_url = 'github.com',
   default_remote = 'origin'
 }
 ```
@@ -25,6 +24,7 @@ require('gopr').setup {
 ## Usage
 * Please execute `:Gopr` command on target line, then [github](https://github.com/) page is opened following commit hash on your web browser.
 * You could set your git remote as an argument like `:Gopr upstream`
+* Just open commit diff, please execute `:Gocd` command on target line. (and so you can reach pull request on github manually)
 
 ## For development
 * Load under development plugin files on root repository.
