@@ -1,22 +1,26 @@
 local vim = vim
 
 local DEFAULT_OPTIONS = {
-  default_remote = 'origin'
+  default_remote = 'origin',
 }
 
 local function run(command)
   local handle = io.popen(command)
-  local result = handle:read("*a")
-  handle:close()
+  if handle then
+    local result = handle:read("*a")
+    handle:close()
 
-  return string.gsub(result, '\n', ' ')
+    return string.gsub(result, '\n', ' ')
+  else
+    return ''
+  end
 end
 
 local function exists(path)
-   local f = io.open(path, "r")
+  local file = io.open(path, "r")
 
-   if f ~= nil then
-    io.close(f)
+  if file then
+    io.close(file)
     return true
   else
     return false
